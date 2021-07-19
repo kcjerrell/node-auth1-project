@@ -1,3 +1,7 @@
+const bcrypt = require('bcryptjs');
+const User = require('../users/users-model');
+
+
 /*
   If the user does not have a session saved in the server
 
@@ -6,8 +10,9 @@
     "message": "You shall not pass!"
   }
 */
-function restricted() {
-
+/** @type {import("express").RequestHandler} */
+function restricted(req, res, next) {
+  next();
 }
 
 /*
@@ -18,8 +23,24 @@ function restricted() {
     "message": "Username taken"
   }
 */
-function checkUsernameFree() {
+/** @type {import("express").RequestHandler} */
+async function checkUsernameFree(req, res, next) {
+  if (!req.body.username || typeof req.body.username !== 'string') {
+    res.status(422).json({ message: "Username required" });
+    return;
+  }
 
+  const username = req.body.username.trim();
+  const result = await User.findBy({ username });
+
+  if (result.length > 0) {
+    res.status(422).json({ message: "Username taken" });
+    console.log(result);
+  }
+  else {
+    req.newUser = { username };
+    next();
+  }
 }
 
 /*
@@ -30,8 +51,24 @@ function checkUsernameFree() {
     "message": "Invalid credentials"
   }
 */
-function checkUsernameExists() {
+/** @type {import("express").RequestHandler} */
+async function checkUsernameExists(req, res, next) {
+  const { username } = req.body;
 
+  if (!username || typeof username !== 'string' || username.length === 0) {
+    res.status(401).json({ message: "invalid credentials" });
+    return;
+  }
+
+  const user = await User.findBy({ username });
+
+  if (!user || user.length !== 1) {
+    res.status(401).json({ message: "invalid credentials" });
+  }
+  else {
+    req.user = user[0];
+    next();
+  }
 }
 
 /*
@@ -42,8 +79,21 @@ function checkUsernameExists() {
     "message": "Password must be longer than 3 chars"
   }
 */
-function checkPasswordLength() {
-
+/** @type {import("express").RequestHandler} */
+function checkPasswordLength(req, res, next) {
+  if (!req.body.password || typeof req.body.password !== 'string' || req.body.password.length <= 3) {
+    res.status(422).json({ message: "Password must be longer than 3 chars" });
+  }
+  else {
+    req.newUser.password = bcrypt.hashSync(req.body.password);
+    next();
+  }
 }
 
 // Don't forget to add these to the `exports` object so they can be required in other modules
+module.exports = {
+  restricted,
+  checkUsernameFree,
+  checkUsernameExists,
+  checkPasswordLength
+}
